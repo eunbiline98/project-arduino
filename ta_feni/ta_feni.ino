@@ -1,0 +1,127 @@
+//sesuikan posisi pin s0,s1,s2 pada ic multiplexer di board nodemcu
+int s0 = D2;
+int s1 = D1;
+int s2 = D0;
+  
+//gunakan A0 sebagai input
+int analogPin = A0;
+  
+//variabel untuk menyimpan nilai input
+int sensor_soil_1 = 0;
+int sensor_soil_2 = 0;
+float kelembaban_tanah_1, kelembaban_tanah_2;
+
+//setup nilai ambang kelembaban tanah
+int nilai_lembab = 70.00;
+int nilai_kering = 40.00;
+
+//solenoid water valve
+#define keran D5
+
+// firebase
+#include "FirebaseESP8266.h"
+#include <ESP8266WiFi.h>
+// Set these to run example.
+#define FIREBASE_HOST ""
+#define FIREBASE_AUTH ""
+#define WIFI_SSID "Robotic_Garage"
+#define WIFI_PASSWORD "robotic77"
+#define indi_wifi D4
+FirebaseData firebaseData;
+  
+void setup() {
+   //aktifkan komunikasi serial
+  Serial.begin(9600);
+  //jadikan pin select sebagai output
+  pinMode(s0, OUTPUT);
+  pinMode(s1, OUTPUT);
+  pinMode(s2, OUTPUT);
+
+  pinMode(keran,OUTPUT);
+  
+  //WiFi
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    digitalWrite(indi_wifi,HIGH);
+    delay(80);
+    digitalWrite(indi_wifi,LOW);
+    delay(80);
+  }
+  Serial.println();
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+  
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  //Firebase.setInt(firebaseData,"Lampu_1",0);
+  Firebase.reconnectWiFi(true);
+}
+  
+void loop() {
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    digitalWrite(indi_wifi,HIGH);
+    delay(1000);
+    digitalWrite(indi_wifi,LOW);
+    delay(100);
+  }
+  
+  //sensor soil moisture 1
+  digitalWrite(s0,LOW);
+  digitalWrite(s1,LOW);
+  digitalWrite(s2,LOW);
+  sensor_soil_1 = analogRead(analogPin);
+  //Serial.print(sensor_soil_1);
+  kelembaban_tanah_1 = ( 100 - ( (sensor_soil_1/1023.00) * 100 ) );
+  Serial.print("Sensor 1 Kelembaban tanah = ");
+  Serial.print(kelembaban_tanah_1);
+  Serial.print("%\n\n");
+  delay(1000);
+
+  Firebase.setFloat(firebaseData,"",kelembaban_tanah_1);
+     
+  //sensor soil moisture 2
+  digitalWrite(s0,HIGH);
+  digitalWrite(s1,LOW);
+  digitalWrite(s2,LOW);
+  sensor_soil_2 = analogRead(analogPin);
+  //Serial.println(sensor_soil_2);
+  kelembaban_tanah_2 = ( 100 - ( (sensor_soil_2/1023.00) * 100 ) );
+  Serial.print("Sensor 2 Kelembaban tanah = ");
+  Serial.print(kelembaban_tanah_2);
+  Serial.print("%\n\n");
+  delay(1000);
+  
+  Firebase.setFloat(firebaseData,"",kelembaban_tanah_1);
+
+  // water valve logic
+  String solenoid;
+  Firebase.getString(firebaseData,"");
+  solenoid=firebaseData.stringData();
+  if(solenoid=="0"){
+    digitalWrite(keran,LOW);
+  }
+    if(solenoid=="1"){
+      digitalWrite(keran,HIGH);
+  }
+   // water valve logic kedua sensor data sesuai
+  if ((kelembaban_tanah_1 >= nilai_lembab)&&(kelembaban_tanah_2 >= nilai_lembab)){
+    digitalWrite(keran,HIGH);
+    Firebase.setString(firebaseData,"","1");
+  }
+  if ((kelembaban_tanah_1 <= nilai_kering)&&(kelembaban_tanah_2 <= nilai_kering)){
+    digitalWrite(keran,LOW);
+    Firebase.setString(firebaseData,"","0");
+  }  
+// water valve logic salah satu sensor data sesuai
+    if ((kelembaban_tanah_1 >= nilai_lembab)||(kelembaban_tanah_2 >= nilai_lembab)){
+    digitalWrite(keran,HIGH);
+    Firebase.setString(firebaseData,"","1");
+  }
+  if ((kelembaban_tanah_1 <= nilai_kering)||(kelembaban_tanah_2 <= nilai_kering)){
+    digitalWrite(keran,LOW);
+    Firebase.setString(firebaseData,"","0");
+  }  
+}
