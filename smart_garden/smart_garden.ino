@@ -50,7 +50,6 @@ if(mode=="1"){
   sensor_dht();
   sensor_soil();
       Serial.println("mode auto");
-      if ()
     } 
   if(mode=="0"){
     control_pompa();
